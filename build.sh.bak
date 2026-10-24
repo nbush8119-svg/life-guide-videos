@@ -1,0 +1,28 @@
+#!/bin/sh
+# 一条命令出片。用法：
+#   ./build.sh ep01            全流程：对齐配音 → 时间线 → 音效事件 → 混音 → 渲染 → 合成 → 封面 → 交付
+#   ./build.sh ep01 <步骤>     单步：align | timeline | mix | stills [秒...] | render | mux | cover | deliver
+set -e
+ROOT=$(cd "$(dirname "$0")" && pwd); cd "$ROOT"
+EP=episodes/$1; STEP=${2:-all}; [ $# -ge 2 ] && shift 2 || shift 1
+[ -f "$EP/script.json" ] || { echo "找不到 $EP/script.json"; exit 1; }
+PY=${PY:-$( [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3 )}
+NAME=$($PY -c "import json;d=json.load(open('$EP/script.json'));print('EP%02d_%s' % (d['ep'], d['title']))")
+step() {
+  case $1 in
+    align)    $PY engine/align.py "$EP" ;;
+    timeline) $PY engine/timeline.py "$EP" && $PY engine/cues.py "$EP" ;;
+    mix)      $PY engine/render.py "$EP" events && $PY engine/mix.py "$EP" ;;
+    stills)   $PY engine/render.py "$EP" stills ${ARGS:-3 15 30 45 60 75 90 105 120 135} ;;
+    render)   $PY engine/render.py "$EP" video 30 ;;
+    mux)      sh engine/mux.sh "$EP/out/video.mp4" "$EP/out/mix.wav" "$EP/out/$NAME.mp4" ;;
+    cover)    $PY engine/cover.py "$EP" ;;
+    deliver)  $PY engine/deliver.py "$EP" ;;
+  esac
+}
+ARGS="$*"
+if [ "$STEP" = all ]; then
+  [ -d "$EP/vo/lines" ] && [ "$(ls $EP/vo/lines | wc -l)" -gt 0 ] || step align
+  for s in timeline mix render mux cover deliver; do echo "== $s"; step $s; done
+  echo "完成：$EP/out/$NAME.mp4"
+else step "$STEP"; fi

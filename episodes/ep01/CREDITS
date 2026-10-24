@@ -1,0 +1,18 @@
+高性价比人生指南 · 第1集《不要早死》— 素材与许可
+
+内容来源
+- 《高性价比人生指南》第 1 节「不要早死」，作者 eternity4719，https://github.com/eternity4719/HowToLiveBetter
+  许可：CC BY 4.0（https://creativecommons.org/licenses/by/4.0/）
+  改动：节选 6 条，口语化缩写；数据保持原文口径。同步版本：2026-10-21（提交 PR #149）。
+
+配音
+- ElevenLabs 语音「Brian」，经 vidIQ 生成（用户账户）。
+
+画面、配乐、音效
+- 全部由代码生成（Canvas 2D 逐帧绘制；numpy 合成配乐与音效），无第三方素材。
+
+字体
+- Noto Serif CJK SC / Noto Sans CJK SC（SIL OFL 1.1）
+- Inter / Inter Display（SIL OFL 1.1）
+
+声明：本片不构成医疗、法律或理财建议。

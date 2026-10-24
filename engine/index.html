@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:"LG Sans";src:url(fonts/NotoSansCJKsc-Medium.otf);font-weight:500}
+@font-face{font-family:"LG Sans";src:url(fonts/NotoSansCJKsc-Bold.otf);font-weight:700}
+@font-face{font-family:"LG Sans";src:url(fonts/NotoSansCJKsc-Black.otf);font-weight:900}
+@font-face{font-family:"LG Serif";src:url(fonts/NotoSerifCJKsc-Black.otf);font-weight:900}
+@font-face{font-family:"LG Num";src:url(fonts/InterDisplay-ExtraBold.otf);font-weight:800}
+@font-face{font-family:"LG Num";src:url(fonts/InterDisplay-Black.otf);font-weight:900}
+html,body{margin:0;background:#0E0E10;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script src="stage.js"></script>
+<script>
+// 加载本集场景：?ep=../episodes/ep01
+const EPDIR = new URLSearchParams(location.search).get('ep');
+const sc = document.createElement('script'); sc.src = EPDIR + '/scenes.js';
+sc.onload = () => { window.EV = []; if (typeof buildEvents === 'function') buildEvents(window.EV);
+  Promise.all(['500 40px "LG Sans"','700 40px "LG Sans"','900 40px "LG Sans"','900 40px "LG Serif"','800 40px "LG Num"','900 40px "LG Num"'].map(f=>document.fonts.load(f,'测试Ab1'))).then(() => { render(0); window.READY = true; }); };
+sc.onerror = () => { throw new Error('scenes.js not found in ' + EPDIR); };
+document.body.appendChild(sc);
+</script></body></html>

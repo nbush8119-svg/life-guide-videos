@@ -1,0 +1,29 @@
+# Noto CJK 字体体积大，用 scripts/fetch_fonts.sh 下载（Inter 字体很小，已入库）
+engine/fonts/Noto*.otf
+
+# 配音音频：ElevenLabs Brian 音色（第 1、2 集整段配音、旁白参考），不入库
+voices/*.wav
+episodes/*/vo/*.mp3
+episodes/*/vo/*.wav
+episodes/*/vo/lines/
+voices/candidates/
+
+# 可重新生成的大文件
+episodes/*/out/*.wav
+episodes/*/out/video.mp4
+episodes/*/out/frames/
+episodes/*/out/stills/
+# 完整版成片 20MB，仓库只放 ≤10MB 的发布版
+episodes/*/out/EP*_*[!版].mp4
+
+# 安装产物
+.venv/
+models/
+__pycache__/
+*.pyc
+.DS_Store
+
+# 绝不提交登录态、Cookie、密钥
+.env
+*.cookie
+cookies*.json
