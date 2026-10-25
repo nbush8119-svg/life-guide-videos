@@ -4,7 +4,10 @@ const W = 1080, H = 1920;
 const cv = document.getElementById('c'), g = cv.getContext('2d');
 const C = { bg:'#0E0E10', ink:'#F2EDE4', mute:'#8D8A84', dim:'#3A3936', line:'#26252A',
             red:'#FF5232', green:'#3DD68C', amber:'#F2B544', panel:'#17171A' };
-const SERIF = '"LG Serif",serif';
+// 版面主题：render.py 用环境变量 THEME 注入 window.__THEME__ = {c:{配色}, bg(t), fg(t), subShadow}
+const THEME = window.__THEME__ || null;
+if (THEME && THEME.c) Object.assign(C, THEME.c);
+const SERIF = THEME && THEME.serif===false ? '"LG Sans",sans-serif' : '"LG Serif",serif';
 const SANS  = '"LG Sans",sans-serif';
 const NUM   = '"LG Num","LG Sans",sans-serif';
 
@@ -69,7 +72,7 @@ function wrapBal(s,maxW,size,font=SANS,weight=700){
   }
   const r=bestP||best; return r?[r[1],r[2]]:wrap(s,maxW,size,font,weight);
 }
-function rrect(x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+function rrect(x,y,w,h,r){if(THEME&&THEME.rad!=null)r*=THEME.rad;r=Math.max(0,Math.min(r,Math.abs(w)/2,Math.abs(h)/2));g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
 
 // ---------- stroke icons (polylines drawn on by progress) ----------
 function arcPts(cx,cy,r,a0,a1,n=40){const p=[];for(let i=0;i<=n;i++){const a=lerp(a0,a1,i/n);p.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]);}return p;}
@@ -143,7 +146,7 @@ function subtitle(t){ if(window.NOSUB) return;
     const w=tw(r,50); let x=540-w/2; const y=y0+ri*72;
     g.font=`700 50px ${SANS}`;
     // soft shadow for legibility
-    g.shadowColor='rgba(0,0,0,.85)';g.shadowBlur=18;
+    g.shadowColor=(THEME&&THEME.subShadow)||'rgba(0,0,0,.85)';g.shadowBlur=18;
     [...r].forEach((ch,i)=>{g.fillStyle=marks[i]?C.amber:C.ink;g.fillText(ch,x,y);x+=g.measureText(ch).width;});
     g.shadowBlur=0;
   });
@@ -206,33 +209,79 @@ function ring(cx,cy,r,u,val,label,color,t0,t){
 function impactAt(t){ const I=window.IMPACTS; if(!I||!I.length) return null;
   let dx=0,dy=0,zz=0,fl=0,fc='255,82,50';
   for(const im of I){ const d=t-im.t; if(d<0||d>.7) continue; const k=im.k??1, e=Math.exp(-d*10)*k;
-    dx+=Math.sin(d*95+im.t*13)*26*e; dy+=Math.cos(d*81+im.t*7)*20*e; zz+=.035*k*Math.exp(-d*7)*Math.min(1,d*30);
+    dx+=Math.sin(d*95+im.t*13)*13*e; dy+=Math.cos(d*81+im.t*7)*10*e; zz+=.035*k*Math.exp(-d*7)*Math.min(1,d*30);
     const f=Math.exp(-d*12)*(im.f??.6)*Math.min(1,d*40); if(f>fl){fl=f;fc=im.c||fc;} }
   return {dx,dy,zz,fl,fc};
 }
 // ---------- master render ----------
-function render(t){
-  g.setTransform(1,0,0,1,0,0); g.globalAlpha=1;
-  // background: warm vignette + faint dot field that drifts
-  g.fillStyle=C.bg; g.fillRect(0,0,W,H);
-  const grd=g.createRadialGradient(540,760,80,540,860,1300); grd.addColorStop(0,'rgba(255,190,120,0.06)'); grd.addColorStop(1,'rgba(0,0,0,0)');
-  g.fillStyle=grd; g.fillRect(0,0,W,H);
-  g.fillStyle='rgba(255,255,255,0.035)';
-  for(let y=0;y<H;y+=60) for(let x=((y/60)%2)*30;x<W;x+=60){ g.fillRect(x+((t*6)%60),y,2,2); }
-  // slow push-in for life
-  const s=sceneAt(t); const cam=impactAt(t); const z=(1+0.025*P(t,s.t0,s.t1))*(1+(cam?cam.zz:0));
-  g.save(); if(cam) g.translate(cam.dx,cam.dy); g.translate(540,760); g.scale(z,z); g.translate(-540,-760);
-  const next=TL.scenes[s.k+1];
+// ---------- 运镜 ----------
+// 每个场景一条缓动镜头路径（缓推 / 缓拉 / 横移交替），背景层以 0.4 倍速反向移动形成景深视差；
+// 场景之间用「斜切光边」擦除转场：新场景从右侧斜切进入并由虚到实对焦，旧场景向左退并失焦。
+const CAMS=[{z0:1.00,z1:1.045,x0:0,x1:-16,y0:6,y1:-10},{z0:1.05,z1:1.01,x0:-14,x1:12,y0:-8,y1:6},{z0:1.00,z1:1.04,x0:16,x1:-8,y0:10,y1:-8}];
+function camAt(s,t){ const c=CAMS[s.k%CAMS.length], u=eInOut(P(t,s.t0-.3,s.t1+.3)); return {z:lerp(c.z0,c.z1,u), x:lerp(c.x0,c.x1,u), y:lerp(c.y0,c.y1,u)}; }
+function drawScene(s,t){
   if(s.id==='hook') FN.hook(t);
   else if(s.id==='outro') FN.outro(t);
-  else {
-    if(s.id===SEQ[0] && t<s.t0+.7){ const f=1-eOut(P(t,s.t0,s.t0+.7)); g.save(); g.globalAlpha=f;
+  else { if(s.id===SEQ[0] && t<s.t0+.7){ const f=1-eOut(P(t,s.t0,s.t0+.7)); g.save(); g.globalAlpha=f;
       for(let i=1;i<SEQ.length;i++){ const p=gridPos(i); cell(p.x,p.y,1); drawIcon(SEQ[i],p.x+80,p.y+18,140,1,C.ink,5); } g.restore(); }
-    withExit(s.id,t,()=>FN[s.id](t)); }
+    FN[s.id](t); }
+}
+function shot(s,t,cam,{blur=0,dx=0,alpha=1}={}){
+  const c=camAt(s,t), z=c.z*(1+(cam?cam.zz:0));
+  g.save(); g.globalAlpha=alpha; if(blur>.3) g.filter=`blur(${blur.toFixed(1)}px)`;
+  if(cam) g.translate(cam.dx,cam.dy);
+  g.translate(540+c.x+dx,860+c.y); g.scale(z,z); g.translate(-540,-860);
+  drawScene(s,t); g.restore();
+}
+const TR0=.18, TR1=.62;                       // 转场：从下一段开始前 0.18s 到开始后 0.62s
+const wipeEdge=(w,y)=>lerp(1080+760,-420,w)-y*.38;
+function clipSide(w,right){ g.beginPath(); const x0=wipeEdge(w,0), x1=wipeEdge(w,1920);
+  if(right){ g.moveTo(x0,0); g.lineTo(2400,0); g.lineTo(2400,1920); g.lineTo(x1,1920); }
+  else { g.moveTo(-400,0); g.lineTo(x0,0); g.lineTo(x1,1920); g.lineTo(-400,1920); } g.closePath(); g.clip(); }
+function glint(w){ const x0=wipeEdge(w,0), x1=wipeEdge(w,1920), a=Math.sin(Math.PI*w);
+  g.save(); g.globalCompositeOperation='lighter'; g.lineCap='round';
+  const col=(THEME&&THEME.glint)||'255,226,170';
+  [[90,.07],[34,.16],[6,.6]].forEach(([lw,al])=>{ g.strokeStyle=`rgba(${col},${(al*a).toFixed(3)})`; g.lineWidth=lw; g.beginPath(); g.moveTo(x0,0); g.lineTo(x1,1920); g.stroke(); });
+  g.restore(); }
+// 浮光：光里缓慢上升的微尘，给画面空气感
+function motes(t){ const col=(THEME&&THEME.mote)||'255,228,190';
+  g.save(); g.globalCompositeOperation='lighter';
+  for(let i=0;i<16;i++){ const sp=14+hash(i+3)*22, x=(hash(i+11)*1180-50+Math.sin(t*.3+i)*30), y=1920-((t*sp+hash(i+5)*1920)%2100), r=6+hash(i+9)*22;
+    const a=(.04+hash(i+13)*.07)*(.6+.4*Math.sin(t*.8+i*1.7));
+    g.fillStyle=`rgba(${col},${a.toFixed(3)})`; g.beginPath(); g.arc(x,y,r,0,7); g.fill(); }
+  g.restore(); }
+// ---------- master render ----------
+function render(t){
+  g.setTransform(1,0,0,1,0,0); g.globalAlpha=1; g.filter='none';
+  const s=sceneAt(t), prev=TL.scenes[s.k-1], next=TL.scenes[s.k+1];
+  // 转场状态：当前帧落在 [next.t0-TR0, next.t0+TR1) 或 [s.t0-TR0, s.t0+TR1)
+  let A=s, B=null, w=0;
+  if(next && t>=next.t0-TR0){ A=s; B=next; w=P(t,next.t0-TR0,next.t0+TR1); }
+  else if(prev && t<s.t0+TR1){ A=prev; B=s; w=P(t,s.t0-TR0,s.t0+TR1); }
+  const we=eInOut(w);
+  // 背景层：随镜头反向移动 0.4 倍（视差）
+  const cb=camAt(B&&we>.5?B:A,t);
+  g.save(); g.translate(540,960); g.scale(1.04,1.04); g.translate(-540-cb.x*.4,-960-cb.y*.4);
+  if(THEME&&THEME.bg){ g.save(); THEME.bg(t); g.restore(); g.globalAlpha=1; } else {
+  g.fillStyle=C.bg; g.fillRect(-60,-60,W+120,H+120);
+  const grd=g.createRadialGradient(540,760,80,540,860,1300); grd.addColorStop(0,'rgba(255,190,120,0.06)'); grd.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=grd; g.fillRect(-60,-60,W+120,H+120);
+  g.fillStyle='rgba(255,255,255,0.035)';
+  for(let y=0;y<H;y+=60) for(let x=((y/60)%2)*30;x<W;x+=60){ g.fillRect(x+((t*6)%60),y,2,2); } }
   g.restore();
+  const cam=impactAt(t);
+  if(!B || we<=0) shot(A,t,cam);
+  else if(we>=1) shot(B,t,cam);
+  else {
+    g.save(); clipSide(we,false); shot(A,t,cam,{blur:7*we,dx:-70*we}); g.restore();
+    g.save(); clipSide(we,true);  shot(B,t,cam,{blur:9*(1-we),dx:90*(1-we)}); g.restore();
+    glint(we);
+  }
   if(cam&&cam.fl>.01){ const gr=g.createRadialGradient(540,1000,60,540,1000,1250);
     gr.addColorStop(0,`rgba(${cam.fc},${(.32*cam.fl).toFixed(3)})`); gr.addColorStop(1,`rgba(${cam.fc},0)`);
     g.save(); g.globalCompositeOperation='lighter'; g.fillStyle=gr; g.fillRect(0,0,W,H); g.restore(); }
+  if(!(THEME&&THEME.motes===false)) motes(t);
+  if(THEME&&THEME.fg){ g.save(); THEME.fg(t); g.restore(); }
   if(typeof overlay==='function') overlay(t);
   chrome(t);
   subtitle(t);

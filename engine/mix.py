@@ -101,9 +101,24 @@ for sid in SND.get("breath_scene", []):          # 段落开头的喘息，例 "
     dip(sc[sid]["t0"]+0.2, L[(sid,0)]["t0"]+0.05, 0.10)
 # sidechain duck from voice envelope
 e = np.abs(vo); win = int(0.08*SR); e = np.convolve(e, np.ones(win)/win, 'same')
-duck = 1 - 0.55*np.clip(e/0.05, 0, 1)
+duck = 1 - float(SND.get("duck", 0.55))*np.clip(e/0.05, 0, 1)
 duck = np.convolve(duck, np.ones(int(0.15*SR))/int(0.15*SR), 'same')
-music *= (gain*duck)[:, None]
+# 跟着旁白的轻重缓急走（script.json sound.dynamics）：
+#   intensity 每段的整体力度；句与句之间的空档里音乐抬起来接话；重音时刻（boom/stamp/chime）短暂推一下
+dyn = np.ones(N); D = SND.get("dynamics")
+if D:
+    for sid, v in D.get("intensity", {}).items():
+        if sid in sc: a, b = int(sc[sid]["t0"]*SR), int(sc[sid]["t1"]*SR); dyn[a:b] = v
+    lines = sorted(TL["lines"], key=lambda l: l["t0"])
+    for l0, l1 in zip(lines, lines[1:]):
+        if l1["t0"] - l0["t1"] > 0.35: a, b = int((l0["t1"]+0.05)*SR), int((l1["t0"]-0.1)*SR); dyn[a:b] *= D.get("gap_lift", 1.35)
+    k = int(0.4*SR); dyn = np.convolve(np.pad(dyn, k, mode="edge"), np.ones(2*k)/(2*k), "same")[k:-k][:N]
+    for ev in json.load(open(f"{EP}/out/events.json")):
+        if ev["type"] in ("boom", "stamp", "chime"):
+            a = int(ev["t"]*SR); n = int(0.9*SR); seg = dyn[a:a+n]
+            seg *= 1 + (D.get("hit_lift", 1.25)-1)*np.sin(np.pi*np.linspace(0, 1, len(seg)))**2
+    print("配乐动态：按段落力度 / 句间接话 / 重音推送")
+music *= (gain*duck*dyn)[:, None]
 
 # ---------------- foley from page events ----------------
 fx = np.zeros((N, 2))
@@ -125,7 +140,30 @@ def stamp():
 def pop():
     n = int(0.18*SR); tt = np.arange(n)/SR
     return np.sin(2*np.pi*(880+500*np.exp(-tt*40))*tt)*np.exp(-tt*28)*0.45
-SFX = {"whoosh": (whoosh, 0.5), "tick": (tick, 0.35), "stamp": (stamp, 0.7), "pop": (pop, 0.5), "pulse": (lambda: HB, 0.9)}
+def boom():          # 冲击：低频下潜 + 一点点空气感，峰值在开头
+    n = int(1.1*SR); tt = np.arange(n)/SR
+    sub = np.sin(2*np.pi*(55*np.exp(-tt*3)+38)*tt)*np.exp(-tt*4.5)
+    air = lp(rng.standard_normal(n), 900)*np.exp(-tt*9)*0.35
+    return (sub + air)*np.minimum(1, tt*400)*0.9
+def riser():         # 0.6 秒上扬的噪声，峰值在末尾（对齐到冲击点）
+    n = int(0.6*SR); tt = np.arange(n)/n; x = rng.standard_normal(n); out = np.zeros(n)
+    for j in range(0, n, 2400):
+        c = 400 + 5000*tt[j]**2; seg = x[j:j+2400]; out[j:j+len(seg)] = bp(seg, c*0.6, min(c*1.5, 20000))
+    return out*tt**2.2*0.5
+def chime():         # 改善：两个温和的钟音
+    n = int(1.4*SR); tt = np.arange(n)/SR
+    x = sum(a*np.sin(2*np.pi*f*tt)*np.exp(-tt*d) for f, a, d in ((1174.7, .5, 3.5), (1760, .3, 4.5), (2349.3, .15, 6)))
+    return x*np.minimum(1, tt*300)*0.5
+def ember():         # 轻微的噼啪声
+    n = int(0.5*SR); tt = np.arange(n)/SR; x = np.zeros(n)
+    for k in rng.integers(0, n-400, 9): x[k:k+300] += hp(rng.standard_normal(300), 2500)*np.exp(-np.arange(300)/40)
+    return x*0.4
+SFX = {"whoosh": (whoosh, 0.5), "tick": (tick, 0.35), "stamp": (stamp, 0.7), "pop": (pop, 0.5), "pulse": (lambda: HB, 0.9),
+       "boom": (boom, 0.75), "riser": (riser, 0.35), "chime": (chime, 0.45), "ember": (ember, 0.4)}
+# 钟表滴答：script.json 的 sound.clock 列出的段落，每秒一声，很轻
+for sid in SND.get("clock", []):
+    if sid in sc:
+        for tt0 in np.arange(sc[sid]["t0"]+0.5, sc[sid]["t1"]-0.3, 1.0): add(fx, tick(), tt0, 0.12)
 for ev in EV:
     f, g = SFX[ev["type"]]; x = f()
     peak = int(np.argmax(np.abs(x)))                # align by measured peak

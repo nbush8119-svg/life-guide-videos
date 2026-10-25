@@ -27,3 +27,7 @@ __pycache__/
 .env
 *.cookie
 cookies*.json
+
+# 逐帧检查静帧（out/sheet.jpg 联系表已保留）
+episodes/*/out/still_*.jpg
+.cache/

@@ -14,6 +14,8 @@ async def main():
         b = await p.chromium.launch(executable_path=exe) if exe else await p.chromium.launch()
         pg = await b.new_page(viewport={"width":1080,"height":1920}, device_scale_factor=1)
         init = "window.__TL__=" + json.dumps(TL, ensure_ascii=False) + (";window.NOSUB=true;" if MODE=="cover" else "")
+        th = os.environ.get("THEME") or json.load(open(EP/"script.json")).get("theme")
+        if th: init += ";" + (ENGINE/"themes.js").read_text() + f";window.__THEME__=window.__THEMES__[{json.dumps(th)}];"
         await pg.add_init_script(init)
         errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
         rel = os.path.relpath(EP, ENGINE)
@@ -27,7 +29,7 @@ async def main():
             names = []
             for a in ARGS:
                 await pg.evaluate(f"render({a})")
-                n = out/("cover_raw.jpg" if MODE=="cover" else f"still_{float(a):06.2f}.jpg")
+                n = out/("cover_raw.jpg" if MODE=="cover" else f"still_{os.environ.get('STILL_TAG','')}{float(a):06.2f}.jpg")
                 await el.screenshot(path=str(n), type="jpeg", quality=92); names.append(str(n))
             if MODE == "stills" and len(names) > 1:
                 cols = min(len(names), 8)
@@ -38,9 +40,10 @@ async def main():
         elif MODE == "video":
             fps = int(ARGS[0]) if ARGS else 30
             ff = subprocess.Popen(["ffmpeg","-y","-loglevel","error","-f","image2pipe","-framerate",str(fps),"-c:v","mjpeg","-i","-",
-                 "-c:v","libx264","-preset","medium","-crf","17","-pix_fmt","yuv420p",str(out/"video.mp4")], stdin=subprocess.PIPE)
-            n = int(TL["dur"]*fps)
-            for i in range(n):
+                 "-c:v","libx264","-preset","medium","-crf","17","-pix_fmt","yuv420p",str(out/("video_part.mp4" if os.environ.get("RANGE") else "video.mp4"))], stdin=subprocess.PIPE)
+            n = int(TL["dur"]*fps); rng = os.environ.get("RANGE")   # 例 RANGE=0:17.5 只渲染这一段 → out/video_part.mp4
+            i0, i1 = (int(float(x)*fps) for x in rng.split(":")) if rng else (0, n)
+            for i in range(i0, min(i1, n)):
                 data = await pg.evaluate("(t)=>{render(t);return document.getElementById('c').toDataURL('image/jpeg',0.93)}", i/fps)
                 ff.stdin.write(base64.b64decode(data.split(",",1)[1]))
                 if i % 300 == 0: print(f"{i}/{n}", flush=True)

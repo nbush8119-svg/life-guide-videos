@@ -1,0 +1,13 @@
+{
+ "hash": "ac98a9cee9",
+ "cfg": {
+  "caption": "Modern documentary score with a clear steady groove, soft punchy kick and tight snare kept low, muted plucked bass, ticking hi-hats, warm felt piano ostinato, subtle coin-like mallet accents, lush string pad swells, tense then confident, builds and releases in sections, premium brand film, no vocals, no lead melody",
+  "bpm": 100,
+  "key": "A minor",
+  "seed": 15,
+  "steps": 48,
+  "model": "acestep-v15-xl-sft"
+ },
+ "dur": 169,
+ "date": "2026-10-25 11:22"
+}

@@ -1,7 +1,14 @@
 """关键词落点：把 script.json 的 "cues"（例 {"alcohol:3": ["零"]}）换成绝对时间，写进 timeline.json 的 "cues"。
 画面里的大数字砸下来、震屏和 boom 都对齐到配音真正说出这个词的那一刻。用法：python3 engine/cues.py episodes/ep02"""
 import sys, os, json, re, numpy as np, soundfile as sf, soxr
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from asr import transcribe
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try: from asr import transcribe
+except ImportError:   # 没装 sherpa-onnx 时用本地 Qwen3-ForcedAligner（audio-stack 环境）按原句逐字对齐
+    from mlx_audio.stt import load as _load
+    _AL = _load(os.path.join(os.environ.get("AUDIO_STACK", os.path.expanduser("~/Documents/ChatGPT/kindle/audio-stack")), "models/Qwen3-ForcedAligner-0.6B-8bit"))
+    def transcribe(path, text=""):
+        r = _AL.generate(audio=path, text=text, language="Chinese")
+        return text, [(it.text, it.start_time) for it in r]
 EP = sys.argv[1]; SR = 48000
 d = json.load(open(f"{EP}/script.json")); tl = json.load(open(f"{EP}/timeline.json"))
 cues = d.get("cues", {})
@@ -17,7 +24,8 @@ for key, words in cues.items():
     if a.ndim > 1: a = a.mean(1)
     if sr != SR: a = soxr.resample(a, sr, SR)
     nz = np.where(np.abs(a) > 0.01)[0]; trim = max(0, nz[0]-480)/SR if len(nz) else 0
-    _, toks = transcribe(p)
+    ref_line = d["scenes"][[s["id"] for s in d["scenes"]].index(sid)]["lines"][i]
+    _, toks = transcribe(p, ref_line) if transcribe.__code__.co_argcount > 1 else transcribe(p)
     chars = []; [chars.extend((c, ts) for c in clean(tok)) for tok, ts in toks]
     hyp = "".join(c for c, _ in chars)
     for w in words:

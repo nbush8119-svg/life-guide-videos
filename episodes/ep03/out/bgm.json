@@ -1,0 +1,13 @@
+{
+ "hash": "ad42387517",
+ "cfg": {
+  "caption": "Minimal documentary underscore, calm and hopeful, warm analog synth pad, soft felt piano motifs, low cello drone, gentle marimba, slow evolving texture, sparse, lots of space for narration, no drums, no vocals, no melody climax, mellow and intimate",
+  "bpm": 64,
+  "key": "D minor",
+  "seed": 7,
+  "steps": 48,
+  "model": "acestep-v15-xl-sft"
+ },
+ "dur": 191,
+ "date": "2026-10-24 09:44"
+}

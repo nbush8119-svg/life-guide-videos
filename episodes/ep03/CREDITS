@@ -1,0 +1,19 @@
+高性价比人生指南 · 第3集《不要浪费精力》— 素材与许可
+
+内容来源
+- 《高性价比人生指南》第 3 节「不要浪费精力」，作者 eternity4719，https://github.com/eternity4719/HowToLiveBetter
+  许可：CC BY 4.0（https://creativecommons.org/licenses/by/4.0/）
+  改动：节选第 3、4、6、9、13、18 条，口语化缩写；数据保持原文口径。同步版本：2026-10-21。
+
+配音
+- Qwen3-TTS 1.7B（Apache 2.0）本机生成，全系列旁白音色（参考 ElevenLabs Brian 音色，用户账户生成的参考句）。
+
+配乐、画面、音效
+- 配乐：ACE-Step 1.5 XL-SFT（MIT）本机生成。
+- 画面：Canvas 2D 逐帧代码绘制；音效 numpy 程序化合成。无第三方素材。
+
+字体
+- Noto Serif CJK SC / Noto Sans CJK SC（SIL OFL 1.1）
+- Inter / Inter Display（SIL OFL 1.1）
+
+声明：本片不构成医疗、法律或理财建议。想不开时请拨打 12356 全国心理援助热线。
